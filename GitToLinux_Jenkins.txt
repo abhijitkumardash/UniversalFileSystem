@@ -1,0 +1,113 @@
+To create a Groovy script for a Jenkins pipeline that fetches files from a GitHub repository and copies them to a Linux server, you can use the following example as a starting point. This script assumes that you have SSH key authentication set up between your Jenkins server and the Linux server for secure file transfer. Make sure you replace placeholders with your actual repository and server details.
+
+pipeline {
+    agent any
+
+    stages {
+        stage('Checkout') {
+            steps {
+                // Check out the GitHub repository
+                checkout([$class: 'GitSCM', branches: [[name: 'master']], doGenerateSubmoduleConfigurations: false, extensions: [], submoduleCfg: [], userRemoteConfigs: [[credentialsId: 'your-github-credentials-id', url: 'https://github.com/your-username/your-repo.git']]])
+            }
+        }
+
+        stage('Copy Files to Linux Server') {
+            steps {
+                script {
+                    // Define SSH credentials for your Linux server
+                    def remoteServer = 'your-linux-server'
+                    def remoteUser = 'your-ssh-username'
+                    def remotePassword = 'your-ssh-password'  // You can use SSH key authentication instead
+
+                    // Define the source and destination directories
+                    def sourceDir = "${workspace}"
+                    def destinationDir = '/path/to/destination/directory'
+
+                    // Use the SSH pipeline plugin to copy files to the Linux server
+                    sshPublisher(
+                        continueOnError: false,
+                        failOnError: true,
+                        publishers: [
+                            sshPublisherDesc(
+                                configName: 'your-ssh-credentials-id', // Create SSH credentials in Jenkins
+                                transfers: [
+                                    sshTransfer(
+                                        execCommand: "mkdir -p ${destinationDir} && scp -r ${sourceDir}/* ${remoteUser}@${remoteServer}:${destinationDir}",
+                                        usePty: false
+                                    )
+                                ]
+                            )
+                        ]
+                    )
+                }
+            }
+        }
+    }
+}
+
+Here's what this script does:
+
+It defines a Jenkins pipeline with two stages: "Checkout" and "Copy Files to Linux Server."
+
+In the "Checkout" stage, it uses the checkout step to fetch the code from your GitHub repository. Replace 'your-github-credentials-id' and the GitHub repository URL with your actual credentials and repository details.
+
+In the "Copy Files to Linux Server" stage, it defines variables for your Linux server connection details, source directory (your workspace where code was checked out), and the destination directory on the Linux server.
+
+It uses the SSH pipeline plugin to securely copy the files to the Linux server using the sshPublisher step. Replace 'your-ssh-credentials-id' with the actual SSH credentials you've configured in Jenkins.
+
+Make sure you have the SSH key authentication set up between Jenkins and your Linux server for secure file transfer. Adjust the variables and paths to match your specific setup.
+
+
+
+
+pipeline {
+    agent any
+ 
+    environment {
+        GITHUB_REPO = 'https://github.com/yourusername/your-repo.git'
+        GITHUB_CREDENTIALS_ID = 'your-github-credentials-id'
+        SERVER_IP = 'your-server-ip'
+        SERVER_PORT = '22'
+        SERVER_USERNAME = 'your-ssh-username'
+        SERVER_CREDENTIALS_ID = 'your-ssh-credentials-id'
+        TARGET_DIRECTORY = '/path/to/destination/on/server'
+    }
+ 
+    stages {
+        stage('Clone Repository') {
+            steps {
+                script {
+                    checkout([
+                        $class: 'GitSCM',
+                        branches: [[name: 'master']],
+                        userRemoteConfigs: [[
+                            credentialsId: env.GITHUB_CREDENTIALS_ID,
+                            url: env.GITHUB_REPO
+                        ]]
+                    ])
+                }
+            }
+        }
+ 
+        stage('Copy Files to Server') {
+            steps {
+                script {
+                    sshagent(credentials: [env.SERVER_CREDENTIALS_ID]) {
+                        sh """\
+                            scp -r ./* ${env.SERVER_USERNAME}@${env.SERVER_IP}:${env.TARGET_DIRECTORY}
+                        """
+                    }
+                }
+            }
+        }
+    }
+ 
+    post {
+        success {
+            echo 'Files copied successfully to the server.'
+        }
+        failure {
+            echo 'Failed to copy files to the server.'
+        }
+    }
+}
